@@ -19,7 +19,7 @@ constexpr unsigned kSecInDay = 60 * 60 * 24;
  auto MakePropToIdxMap() {
     std::map<std::string, size_t> propToIdx;
     for (size_t i = 0; i < PropSet::kPropNumber; ++i) {
-        propToIdx["prop" + std::to_string(i)] = i;
+        propToIdx["prop" + std::to_string(i + 1)] = i;
     }
     return propToIdx;
 }
