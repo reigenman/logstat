@@ -1,99 +1,65 @@
+#include "app.hpp"
+#include <fstream>
 #include <iostream>
-#include <string_view>
-#include <getopt.h>
+#include <logstat/aggregator.hpp>
 
-// Use Boost.Program_options instead
-struct ProgramOpts {
-    std::string logDirPath;
-    std::string logFilePrefix;
-    std::string outFilePath;
-    int threadNumber{1};
+namespace logstat::app {
 
-    void SetArg(const char * name, const char * value)
+namespace {
+
+void CreateFile(const fs::path & path)
+{
+    std::ofstream ofs(path,  std::ios::out | std::ios::trunc);
+    if (!ofs) {
+        throw std::runtime_error("failed to open the file: " + path.string());
+    }
+}
+
+bool FilterLogName(const fs::path & path, const std::string & logFilePrefix)
+{
+    if (logFilePrefix.empty()) {
+        return true;
+    }
+    return path.filename().string().find(logFilePrefix) != std::string::npos;
+}
+
+void CollectStatForFile(const fs::path & path)
+{
+    std::ifstream inFile(path);
+    std::string line;
+    logstat::Aggregator aggregator;
+    while (std::getline(inFile, line)) {
+        aggregator.AddLine(line);
+    }
+}
+
+} // namespace
+
+struct Application::Private {
+    explicit Private(unsigned int threadsNum) {}
+
+
+    void Run(const fs::path & logDir, const fs::path & outFile, const std::string & logFilePrefix)
     {
-        if (!value || !name) {
-            badArgs_ = true;
-            return;
-        }
-        std::string_view argName(name);
-        if (argName == "logs_dir") {
-            logDirPath = value;
-        } else if (argName == "logs_prefix") {
-            logFilePrefix = value;
-        } else if (argName == "output") {
-            outFilePath = value;
-        } else {
-            badArgs_ = true;
+        CreateFile(outFile);
+        for (const auto & dirEntry : std::filesystem::directory_iterator(logDir)) {
+            if (dirEntry.is_regular_file() && FilterLogName(dirEntry.path(), logFilePrefix)) {
+                CollectStatForFile(dirEntry.path());
+            }
         }
     }
 
-    void SetThreads(const char * value)
-    {
-        if (!value) {
-            badArgs_ = true;
-            return;
-        }
-        try {
-            threadNumber = std::stoi(value);
-        } catch (const std::exception & e) {
-            badArgs_ = true;
-        }
-
-    }
-
-    bool IsBadArgs() const { return badArgs_; }
-
-    void SetBadArgs() { badArgs_ = true; }
-
-    bool IsValid() const { return !IsBadArgs() && !logDirPath.empty() && !outFilePath.empty() && threadNumber > 0; }
-
-    std::string GetUsage()
-    {
-        return "Usage: aggregator --logs_dir PATH --output FILE_PATH [--logs_prefix LOGS_FILES_PREFIX] [--threads THREAD_NUMBER]\n";
-    }
-private:
-    bool badArgs_{false};
 };
 
-int main(int argc, char * argv[])
+Application::Application(unsigned int threadsNum)
+    : p_(new Private(threadsNum))
+{}
+Application::~Application() noexcept
+{}
+
+void Application::Run(const fs::path & logDir, const fs::path & outFile, const std::string & logFilePrefix)
 {
-    ProgramOpts opts;
+    p_->Run(logDir, outFile, logFilePrefix);
+}
 
-    option longOptions[] = {
-        {"logs_dir", required_argument, 0, 0},
-        {"logs_prefix", required_argument, 0, 0},
-        {"output",  required_argument, 0, 0},
-        {"threads",  required_argument, 0, 1},
-        {"help",  no_argument, 0, 2},
-        {0, 0, 0, 0}
-    };
-    bool failed = false;
-    while (!opts.IsBadArgs()) {
-        int optionIndex = 0;
-        optarg = nullptr;
-        int c = getopt_long(argc, argv, "", longOptions, &optionIndex);
-        if (c == -1)
-            break;
-        switch (c) {
-            case 0:
-                opts.SetArg(longOptions[optionIndex].name, optarg);
-                break;
-            case 1:
-                opts.SetThreads(optarg);
-                break;
-            case 2:
-                std::cout << opts.GetUsage();
-                return 0;
-            default:
-                opts.SetBadArgs();
-                break;
-        }
-    }
-    if (!opts.IsValid()) {
-        std::cerr << "invalid parameters\n";
-        std::cerr << opts.GetUsage();
-        return 1;
-    }
-
-    return 0;
 }

@@ -1,9 +1,7 @@
 #include <logstat/aggregator.hpp>
 #include <map>
+#include "jsonlib.hpp"
 
-#define RAPIDJSON_ASSERT(x) (!(x) ? throw logstat::ParseError("broken line") : (void)0u)
-
-#include <rapidjson/document.h>
 
 namespace logstat {
 
@@ -15,6 +13,17 @@ constexpr char kFactName[] = "fact_name";
 constexpr char kProps[] = "props";
 
 constexpr unsigned kSecInDay = 60 * 60 * 24;
+
+struct FieldCheck {
+    const char * name;
+    rj::Type rjType;
+};
+
+constexpr FieldCheck kFields[] = {
+    FieldCheck{kTsFact, rj::kNumberType},
+    FieldCheck{kFactName, rj::kStringType},
+    FieldCheck{kProps, rj::kObjectType},
+};
 
  auto MakePropToIdxMap() {
     std::map<std::string, size_t> propToIdx;
@@ -34,11 +43,23 @@ const auto & PropToIdxMap() {
 void logstat::Aggregator::AddLine(std::string_view line)
 {
     rj::Document document;
-    document.Parse(line.data(), line.size());
+    rj::ParseResult parseRes = document.Parse(line.data(), line.size());
+    if (!parseRes || !document.IsObject()) {
+        LogError();
+        return;
+    }
+    for (const auto & check : kFields) {
+        auto it = document.FindMember(check.name);
+        if (it == document.MemberEnd() || it->value.GetType() != check.rjType) {
+            LogError();
+            return;
+        }
+
+    }
     const auto & tsFactNode = document[kTsFact];
     const auto & factNameNode = document[kFactName];
     const auto & propsNode = document[kProps];
-    if (!tsFactNode.IsUint() || factNameNode.IsString() || !propsNode.IsObject()) {
+    if (!tsFactNode.IsUint()) {
         LogError();
         return;
     }

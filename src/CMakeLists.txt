@@ -7,11 +7,13 @@ set(HEADERS
     ../include/logstat/aggregator.hpp
     ../include/logstat/prop_set.hpp
     ../include/logstat/stats.hpp
+    ../include/logstat/errors.hpp
 )
 
 set(SOURCES
     thread_pool.cpp
     aggregator.cpp
+    jsonlib.hpp
 )
 
 target_sources(${_target} PRIVATE ${SOURCES} ${HEADERS})
