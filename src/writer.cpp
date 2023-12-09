@@ -2,8 +2,10 @@
 #include <stdexcept>
 #include <fstream>
 #include "jsonlib.hpp"
+#include <time.h>
 
 namespace logstat {
+
 
 struct Writer::Private {
     explicit Private(const std::filesystem::path & outfilePath)
@@ -27,7 +29,17 @@ struct Writer::Private {
     void WriteResult(DayCountMap && dayStat)
     {
         for (auto & [day, facts] : dayStat) {
-            writer.Key(std::to_string(day).c_str());
+            tm tb;
+            time_t tsec = static_cast<time_t>(day);
+            tm * gmTime = gmtime_r(&tsec, &tb);
+            if (!gmTime) {
+                continue;
+            }
+            char timeString[std::size("yyyy-mm-dd")];
+            std::strftime(std::data(timeString), std::size(timeString), "%Y-%m-%d", gmTime);
+            // paranoic check
+            timeString[std::size(timeString) - 1] = '\0';
+            writer.Key(timeString);
             writer.StartObject();
             for (auto & [fact, props] : facts) {
                 writer.Key(fact.c_str());
