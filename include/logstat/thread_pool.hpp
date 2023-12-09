@@ -6,35 +6,22 @@
 
 namespace logstat {
 
-
 class ThreadPool {
 public:
     using Task = std::function<void ()>;
-    explicit ThreadPool(unsigned numThreads = 0)
-    {
-        if (numThreads == 0) {
-            numThreads = std::thread::hardware_concurrency();
-        }
-        numThreads = std::max(numThreads, 1u);
-        for (unsigned i = 0; i < numThreads; ++i) {
-            threads_.emplace_back([this] {
-                this->Run();
-            });
-        }
-    }
+    explicit ThreadPool(unsigned numThreads = 0);
+    ~ThreadPool();
 
-    ~ThreadPool()
+    ThreadPool(const ThreadPool & rhs) = delete;
+    ThreadPool & operator=(const ThreadPool & rhs) = delete;
+
+    template<typename Func>
+    void Post(Func && task)
     {
-        for (auto & th : threads_) {
-            if (th.joinable()) {
-                th.join();
-            }
-        }
+        tasks_.Push(Task(std::forward<Func>(task)));
     }
 private:
-    void Run()
-    {
-    }
+    void Run();
     Queue<Task> tasks_;
     std::vector<std::thread> threads_;
 };

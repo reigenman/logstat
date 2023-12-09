@@ -12,9 +12,6 @@ public:
     Queue(const Queue & rhs) = delete;
     Queue & operator=(const Queue & rhs) = delete;
 
-    Queue(Queue && rhs) = default;
-    Queue & operator=(Queue && rhs) = default;
-
     bool Push(T && value)
     {
         {
@@ -24,6 +21,7 @@ public:
             deq_.push_back(std::move(value));
         }
         rdCondVar_.notify_one();
+        return true;
     }
 
     bool Get(T & value)
