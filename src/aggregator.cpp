@@ -1,4 +1,5 @@
 #include <logstat/aggregator.hpp>
+#include <logstat/prop_set.hpp>
 #include <map>
 #include "jsonlib.hpp"
 
@@ -8,22 +9,11 @@ namespace logstat {
 namespace rj = rapidjson;
 
 namespace {
-constexpr char kTsFact[] = "ts_fact";
-constexpr char kFactName[] = "fact_name";
-constexpr char kProps[] = "props";
+constexpr std::string_view kTsFact("ts_fact");
+constexpr std::string_view kFactName("fact_name");
+constexpr std::string_view kProps("props");
 
 constexpr unsigned kSecInDay = 60 * 60 * 24;
-
-struct FieldCheck {
-    const char * name;
-    rj::Type rjType;
-};
-
-constexpr FieldCheck kFields[] = {
-    FieldCheck{kTsFact, rj::kNumberType},
-    FieldCheck{kFactName, rj::kStringType},
-    FieldCheck{kProps, rj::kObjectType},
-};
 
  auto MakePropToIdxMap() {
     std::map<std::string, size_t> propToIdx;
@@ -32,10 +22,31 @@ constexpr FieldCheck kFields[] = {
     }
     return propToIdx;
 }
-
 const auto & PropToIdxMap() {
     static const std::map<std::string, size_t> propToIdx = MakePropToIdxMap();
     return propToIdx;
+}
+std::string CollectProps(const rj::Document::Object & props)
+{
+    std::string result;
+    PropSet propValues;
+    const auto & propToIdx = PropToIdxMap();
+    for (const auto & prop : props) {
+        if (!prop.value.IsUint()) {
+            return result;
+        }
+        auto propIt = propToIdx.find(prop.name.GetString());
+        if (propIt == propToIdx.end()) {
+            return result;
+        }
+        propValues.props[propIt->second] = prop.value.GetUint();
+    }
+    auto lastValIt = std::prev(propValues.props.end());
+    for (auto it = propValues.props.begin(); it != lastValIt; ++it) {
+        result.append(std::to_string(*it) + ",");
+    }
+    result.append(std::to_string(*lastValIt));
+    return result;
 }
 
 } // namespace
@@ -48,44 +59,46 @@ void logstat::Aggregator::AddLine(std::string_view line)
         LogError();
         return;
     }
-    for (const auto & check : kFields) {
-        auto it = document.FindMember(check.name);
-        if (it == document.MemberEnd() || it->value.GetType() != check.rjType) {
-            LogError();
-            return;
+    uint32_t tsFact = std::numeric_limits<uint32_t>::max();
+    const char * factName = nullptr;
+    auto propNodeIt = document.MemberEnd();
+    for (auto it = document.MemberBegin(); it != document.MemberEnd(); ++it) {
+        const char * memberName = it->name.GetString();
+        const auto & value = it->value;
+        if (memberName == kTsFact) {
+            if (!value.IsUint()) {
+                break;
+            }
+            tsFact = value.GetUint();
+        } else if (memberName == kFactName) {
+            if (!value.IsString()) {
+                break;
+            }
+            factName = value.GetString();
+        } else if (memberName == kProps) {
+            if (!value.IsObject()) {
+                break;
+            }
+            propNodeIt = it;
         }
-
     }
-    const auto & tsFactNode = document[kTsFact];
-    const auto & factNameNode = document[kFactName];
-    const auto & propsNode = document[kProps];
-    if (!tsFactNode.IsUint()) {
+    if (tsFact == std::numeric_limits<uint32_t>::max() || !factName || propNodeIt == document.MemberEnd()) {
         LogError();
         return;
     }
-    const auto & props = propsNode.GetObject();
+    const auto & props = propNodeIt->value.GetObject();
     if (props.MemberCount() != PropSet::kPropNumber) {
         LogError();
         return;
     }
-    PropSet propSet;
-    const auto & idxMap = PropToIdxMap();
-    for (const auto & prop : props) {
-        if (!prop.value.IsUint()) {
-            LogError();
-            return;
-        }
-        auto idxIt = idxMap.find(prop.name.GetString());
-        if (idxIt == idxMap.cend()) {
-            LogError();
-            return;
-        }
-        propSet.props[idxIt->second] = prop.value.GetUint();
+    uint32_t dayTime = tsFact / kSecInDay;
+    auto propComb = CollectProps(props);
+    if (propComb.empty()) {
+        LogError();
+        return;
     }
-    uint32_t dayTime = tsFactNode.GetUint() / kSecInDay;
-    const auto * factName = factNameNode.GetString();
 
-    stats_[dayTime][factName][propSet] += 1;
+    stats_[dayTime][factName][std::move(propComb)] += 1;
 }
 
 void Aggregator::LogError()

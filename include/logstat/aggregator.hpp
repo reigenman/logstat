@@ -12,6 +12,7 @@ public:
 
 private:
     void LogError();
+
     DayCountMap stats_;
     unsigned skippedLines_{0};
 };
