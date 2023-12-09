@@ -2,18 +2,11 @@
 #include <fstream>
 #include <iostream>
 #include <logstat/aggregator.hpp>
+#include <logstat/writer.hpp>
 
 namespace logstat::app {
 
 namespace {
-
-void CreateFile(const fs::path & path)
-{
-    std::ofstream ofs(path,  std::ios::out | std::ios::trunc);
-    if (!ofs) {
-        throw std::runtime_error("failed to open the file: " + path.string());
-    }
-}
 
 bool FilterLogName(const fs::path & path, const std::string & logFilePrefix)
 {
@@ -23,7 +16,7 @@ bool FilterLogName(const fs::path & path, const std::string & logFilePrefix)
     return path.filename().string().find(logFilePrefix) != std::string::npos;
 }
 
-void CollectStatForFile(const fs::path & path)
+void CollectStatForFile(const fs::path & path, logstat::DayCountMap & result)
 {
     std::ifstream inFile(path);
     std::string line;
@@ -31,6 +24,7 @@ void CollectStatForFile(const fs::path & path)
     while (std::getline(inFile, line)) {
         aggregator.AddLine(line);
     }
+    result = std::move(aggregator).GetResult();
 }
 
 } // namespace
@@ -41,14 +35,15 @@ struct Application::Private {
 
     void Run(const fs::path & logDir, const fs::path & outFile, const std::string & logFilePrefix)
     {
-        CreateFile(outFile);
+        Writer writer(outFile);
         for (const auto & dirEntry : std::filesystem::directory_iterator(logDir)) {
             if (dirEntry.is_regular_file() && FilterLogName(dirEntry.path(), logFilePrefix)) {
-                CollectStatForFile(dirEntry.path());
+                logstat::DayCountMap result;
+                CollectStatForFile(dirEntry.path(), result);
+                writer.WriteResult(std::move(result));
             }
         }
     }
-
 };
 
 Application::Application(unsigned int threadsNum)

@@ -8,11 +8,13 @@ set(HEADERS
     ../include/logstat/prop_set.hpp
     ../include/logstat/stats.hpp
     ../include/logstat/errors.hpp
+    ../include/logstat/writer.hpp
 )
 
 set(SOURCES
     thread_pool.cpp
     aggregator.cpp
+    writer.cpp
     jsonlib.hpp
 )
 

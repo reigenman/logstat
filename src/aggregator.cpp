@@ -101,6 +101,11 @@ void logstat::Aggregator::AddLine(std::string_view line)
     stats_[dayTime][factName][std::move(propComb)] += 1;
 }
 
+DayCountMap Aggregator::GetResult() &&
+{
+    return std::move(stats_);
+}
+
 void Aggregator::LogError()
 {
     skippedLines_++;
