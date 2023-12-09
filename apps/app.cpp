@@ -5,6 +5,7 @@
 #include <logstat/writer.hpp>
 #include <logstat/thread_pool.hpp>
 #include <logstat/threadsafe_queue.hpp>
+#include <chrono>
 
 namespace logstat::app {
 
@@ -36,7 +37,10 @@ void AsyncCollectStatForFile(const fs::path & path, ResultQueuePtr resultQueue)
 {
     logstat::DayCountMap result;
     try {
+        auto statTp = std::chrono::steady_clock::now();
         CollectStatForFile(path, result);
+        std::chrono::duration<double> procTime = std::chrono::steady_clock::now() - statTp;
+        std::cout << "file=" << path << ", proc_time="  << procTime.count() << " secs\n";
     } catch (const std::exception & e) {
         std::cerr << "caught exception while collection: " << e.what() << "\n";
     }
@@ -46,7 +50,10 @@ void AsyncCollectStatForFile(const fs::path & path, ResultQueuePtr resultQueue)
 } // namespace
 
 struct Application::Private {
-    explicit Private(unsigned int threadsNum) : thPool(threadsNum) {}
+    explicit Private(unsigned int threadsNum)
+        : thPool(threadsNum)
+          , threadNumber(threadsNum)
+    {}
 
 
     void Run(const fs::path & logDir, const fs::path & outFile, const std::string & logFilePrefix)
@@ -60,8 +67,18 @@ struct Application::Private {
                     AsyncCollectStatForFile(path, results);
                 });
                 ++filesCount;
+
+                // stop pushing task to avoid many result in the queue
+                // if writing is too slow
+                if (filesCount >= threadNumber) {
+                    DayCountMap result;
+                    resultQueue->Get(result);
+                    writer.WriteResult(std::move(result));
+                    --filesCount;
+                }
             }
         }
+        // consume rest results
         for (int i = 0; i < filesCount; ++i) {
             DayCountMap result;
             resultQueue->Get(result);
@@ -70,6 +87,7 @@ struct Application::Private {
 
     }
     ThreadPool thPool;
+    unsigned threadNumber;
 };
 
 Application::Application(unsigned int threadsNum)
