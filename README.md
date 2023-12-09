@@ -11,4 +11,10 @@ Uses rapidjson from OS repos, to install it run with sudo
 sudo apt install rapidjson-dev
 ```
 
+# Usage
+
+```bash
+Usage: aggregator --logs_dir PATH --output FILE_PATH [--logs_prefix LOGS_FILES_PREFIX] [--threads THREAD_NUMBER]
+```
+
 
