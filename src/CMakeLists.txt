@@ -9,6 +9,7 @@ set(HEADERS
     ../include/logstat/stats.hpp
     ../include/logstat/errors.hpp
     ../include/logstat/writer.hpp
+    ../include/logstat/threadsafe_queue.hpp
 )
 
 set(SOURCES
