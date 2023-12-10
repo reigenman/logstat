@@ -19,7 +19,7 @@ bool FilterLogName(const fs::path & path, const std::string & logFilePrefix)
     if (logFilePrefix.empty()) {
         return true;
     }
-    return path.filename().string().find(logFilePrefix) != std::string::npos;
+    return path.filename().string().find(logFilePrefix) == 0u;
 }
 
 void CollectStatForFile(const fs::path & path, logstat::DayCountMap & result)
