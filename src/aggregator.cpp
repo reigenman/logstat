@@ -91,7 +91,7 @@ void logstat::Aggregator::AddLine(std::string_view line)
         LogError();
         return;
     }
-    uint32_t dayTime = tsFact / kSecInDay;
+    uint32_t dayTime = (tsFact / kSecInDay) * kSecInDay;
     auto propComb = CollectProps(props);
     if (propComb.empty()) {
         LogError();
