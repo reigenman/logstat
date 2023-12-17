@@ -1,6 +1,8 @@
 build*
 CMakeLists.txt.user
 .vscode
+.idead
+bin
 # Prerequisites
 *.d
 
